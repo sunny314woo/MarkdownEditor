@@ -799,6 +799,7 @@ export function loadState(): FileManagerState {
        }
      }
    } catch (error) {
+     // eslint-disable-next-line no-console
      console.error('Failed to load file manager state:', error);
    }
   
@@ -809,6 +810,7 @@ export function saveState(state: FileManagerState): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('Failed to save file manager state:', error);
   }
 }

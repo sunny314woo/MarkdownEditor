@@ -21,6 +21,13 @@ interface FileInfo {
 
 const fsAccessSupported = typeof window !== 'undefined' && 'showDirectoryPicker' in window
 
+function getErrorInfo(err: unknown): { name: string; message: string } {
+  if (err instanceof Error) {
+    return { name: err.name, message: err.message || '未知错误' }
+  }
+  return { name: '', message: '未知错误' }
+}
+
 function extractFileInfo(file: { name: string; content: string }): FileInfo {
   const { frontMatter, content } = parseFrontMatter(file.content)
   const title = frontMatter.title || (() => {
@@ -51,6 +58,7 @@ export default function BlogModal({ isOpen, onClose, files, onSuccess, onError }
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
+  const previewUrlRef = useRef<string | null>(null)
 
   const mdFiles = files.filter(f => f.name.endsWith('.md'))
   const fileInfos = mdFiles.map(extractFileInfo)
@@ -63,12 +71,17 @@ export default function BlogModal({ isOpen, onClose, files, onSuccess, onError }
       setIsGenerating(false)
       setIsDownloading(false)
       setError(null)
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl)
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current)
+        previewUrlRef.current = null
       }
       setPreviewUrl(null)
     }
   }, [isOpen])
+
+  useEffect(() => {
+    previewUrlRef.current = previewUrl
+  }, [previewUrl])
 
   useEffect(() => {
     return () => {
@@ -105,8 +118,8 @@ export default function BlogModal({ isOpen, onClose, files, onSuccess, onError }
         setPreviewUrl(null)
       }
       onSuccess(`博客生成成功！共 ${genResult.posts.length} 篇文章，${genResult.files.length} 个文件`)
-    } catch (err: any) {
-      const msg = err.message || '未知错误'
+    } catch (err) {
+      const { message: msg } = getErrorInfo(err)
       setError(`生成失败: ${msg}`)
       onError(`博客生成失败: ${msg}`)
     } finally {
@@ -121,12 +134,12 @@ export default function BlogModal({ isOpen, onClose, files, onSuccess, onError }
     try {
       await downloadBlogAsZip(result)
       onSuccess('博客文件已保存到所选文件夹')
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
+    } catch (err) {
+      const { name, message: msg } = getErrorInfo(err)
+      if (name === 'AbortError') {
         setIsDownloading(false)
         return
       }
-      const msg = err.message || '未知错误'
       setError(`下载失败: ${msg}`)
       onError(`博客下载失败: ${msg}`)
     } finally {
@@ -166,8 +179,8 @@ export default function BlogModal({ isOpen, onClose, files, onSuccess, onError }
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       onSuccess('单文件博客已下载')
-    } catch (err: any) {
-      const msg = err.message || '未知错误'
+    } catch (err) {
+      const { message: msg } = getErrorInfo(err)
       setError(`下载失败: ${msg}`)
       onError(`单文件下载失败: ${msg}`)
     } finally {

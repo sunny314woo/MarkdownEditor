@@ -55,6 +55,7 @@ function logError(formula: string, displayMode: boolean, error: string): void {
   if (errorLogs.length > MAX_ERROR_LOGS) {
     errorLogs.shift();
   }
+  // eslint-disable-next-line no-console
   console.warn(`[KaTeX] Formula render error: ${error}`, { formula, displayMode });
 }
 

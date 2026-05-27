@@ -37,7 +37,12 @@ function inferTagsFromContent(content: string): string[] {
   const h2Matches = content.match(/^##\s+(.+)$/gm)
   if (h2Matches) {
     for (const m of h2Matches) {
-      const heading = m.replace(/^##\s+/, '').replace(/[*_`~\[\]]/g, '').trim()
+      const heading = m
+        .replace(/^##\s+/, '')
+        .replace(/[*_`~]/g, '')
+        .replace(/\[/g, '')
+        .replace(/\]/g, '')
+        .trim()
       if (heading.length >= 2 && heading.length <= 20) {
         tags.push(heading)
       } else if (heading.length > 20) {
@@ -49,7 +54,12 @@ function inferTagsFromContent(content: string): string[] {
   const h3Matches = content.match(/^###\s+(.+)$/gm)
   if (h3Matches && tags.length < 3) {
     for (const m of h3Matches) {
-      const heading = m.replace(/^###\s+/, '').replace(/[*_`~\[\]]/g, '').trim()
+      const heading = m
+        .replace(/^###\s+/, '')
+        .replace(/[*_`~]/g, '')
+        .replace(/\[/g, '')
+        .replace(/\]/g, '')
+        .trim()
       if (heading.length >= 2 && heading.length <= 20) {
         tags.push(heading)
       }
@@ -201,6 +211,7 @@ export async function downloadBlogAsZip(result: BlogGenerationResult): Promise<v
       await writeFilesToDirectory(dirHandle, result.files)
       return
     } catch {
+      // 用户取消目录选择时回退到单文件下载。
     }
   }
 

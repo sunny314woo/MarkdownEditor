@@ -13,6 +13,8 @@ interface ToolbarButtonProps {
   buttonRef?: React.Ref<HTMLButtonElement>
 }
 
+const noop = () => undefined
+
 function ToolbarButton({ onClick, title, ariaLabel, disabled = false, children, buttonRef }: ToolbarButtonProps) {
   const [hovered, setHovered] = useState(false)
   const [active, setActive] = useState(false)
@@ -530,7 +532,7 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
       <div style={{ width: '3px', height: '20px', borderRadius: '2px', background: 'linear-gradient(to bottom, var(--button-primary), #a78bfa)', marginRight: '8px', flexShrink: 0 }} />
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, var(--button-primary), #a78bfa, #f472b6)' }} />
       <ToolbarButton
-        onClick={onUndo || (() => {})}
+        onClick={onUndo || noop}
         title="撤销 (Ctrl+Z)"
         ariaLabel="撤销"
         disabled={!canUndo}
@@ -541,7 +543,7 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
       </ToolbarButton>
 
       <ToolbarButton
-        onClick={onRedo || (() => {})}
+        onClick={onRedo || noop}
         title="重做 (Ctrl+Y)"
         ariaLabel="重做"
         disabled={!canRedo}
@@ -651,7 +653,7 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
       </ToolbarButton>
 
       <ToolbarButton
-        onClick={onInsertFootnote || (() => {})}
+        onClick={onInsertFootnote || noop}
         title="插入脚注 (Ctrl+Shift+N)"
         ariaLabel="插入脚注"
       >
@@ -825,7 +827,7 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
       <div style={{ width: '1px', height: '20px', borderRadius: '1px', backgroundColor: 'var(--editor-border)', margin: '0 6px' }} />
 
       <ToolbarButton
-        onClick={onUploadImage || (() => {})}
+        onClick={onUploadImage || noop}
         title="上传图片"
         ariaLabel="上传图片"
       >
@@ -835,7 +837,7 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
       </ToolbarButton>
 
       <ToolbarButton
-        onClick={onOptimizeImages || (() => {})}
+        onClick={onOptimizeImages || noop}
         title="优化图片 (Base64 转本地文件)"
         ariaLabel="优化图片"
       >
@@ -845,7 +847,7 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
       </ToolbarButton>
 
       <ToolbarButton
-        onClick={onSearchReplace || (() => {})}
+        onClick={onSearchReplace || noop}
         title="搜索与替换 (Ctrl+F)"
         ariaLabel="搜索与替换"
       >
@@ -859,7 +861,7 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
       <div style={{ width: '1px', height: '20px', borderRadius: '1px', backgroundColor: 'var(--editor-border)', margin: '0 6px' }} />
 
       <ToolbarButton
-        onClick={onOpenFile || (() => {})}
+        onClick={onOpenFile || noop}
         title="打开文件"
         ariaLabel="打开 Markdown 文件"
       >
@@ -869,7 +871,7 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
       </ToolbarButton>
 
       <ToolbarButton
-        onClick={onSaveAs || (() => {})}
+        onClick={onSaveAs || noop}
         title="另存为"
         ariaLabel="另存为"
       >
@@ -879,7 +881,7 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
       </ToolbarButton>
 
       <ToolbarButton
-        onClick={onOpenFrontMatter || (() => {})}
+        onClick={onOpenFrontMatter || noop}
         title="文章元信息"
         ariaLabel="文章元信息"
       >
@@ -889,7 +891,7 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
       </ToolbarButton>
 
       <ToolbarButton
-        onClick={onTogglePreview || (() => {})}
+        onClick={onTogglePreview || noop}
         title={showPreview ? '关闭预览' : '打开预览'}
         ariaLabel={showPreview ? '关闭预览' : '打开预览'}
       >

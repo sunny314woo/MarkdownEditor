@@ -29,6 +29,8 @@ const WelcomePage: React.FC<WelcomePageProps> = ({
 
   useEffect(() => {
     let i = 0
+    let subTimer: ReturnType<typeof setInterval> | undefined
+    let cardsTimer: ReturnType<typeof setTimeout> | undefined
     const timer = setInterval(() => {
       if (i <= titleFull.length) {
         setTypedTitle(titleFull.slice(0, i))
@@ -36,18 +38,22 @@ const WelcomePage: React.FC<WelcomePageProps> = ({
       } else {
         clearInterval(timer)
         let j = 0
-        const subTimer = setInterval(() => {
+        subTimer = setInterval(() => {
           if (j <= subFull.length) {
             setTypedSub(subFull.slice(0, j))
             j++
           } else {
-            clearInterval(subTimer)
-            setTimeout(() => setShowCards(true), 200)
+            if (subTimer) clearInterval(subTimer)
+            cardsTimer = setTimeout(() => setShowCards(true), 200)
           }
         }, 40)
       }
     }, 80)
-    return () => clearInterval(undefined as any)
+    return () => {
+      clearInterval(timer)
+      if (subTimer) clearInterval(subTimer)
+      if (cardsTimer) clearTimeout(cardsTimer)
+    }
   }, [])
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {

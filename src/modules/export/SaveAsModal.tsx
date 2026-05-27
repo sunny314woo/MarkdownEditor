@@ -34,6 +34,18 @@ type SaveLocationState =
   | { type: 'file'; handle: FileSystemFileHandle; name: string }
   | { type: 'directory'; handle: FileSystemDirectoryHandle; name: string }
 
+type FilePickerWindow = Window & {
+  showSaveFilePicker: (options?: ShowSaveFilePickerOptions) => Promise<FileSystemFileHandle>
+  showDirectoryPicker: (options?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>
+}
+
+function getErrorInfo(err: unknown): { name: string; message: string } {
+  if (err instanceof Error) {
+    return { name: err.name, message: err.message || '未知错误' }
+  }
+  return { name: '', message: '未知错误' }
+}
+
 export default function SaveAsModal({
   isOpen,
   onClose,
@@ -82,7 +94,7 @@ export default function SaveAsModal({
 
     setIsSelectingLocation(true)
     try {
-      const handle = await (window as any).showSaveFilePicker({
+      const handle = await (window as unknown as FilePickerWindow).showSaveFilePicker({
         suggestedName: fullFileName,
         types: [{
           description: FORMAT_OPTIONS.find(f => f.value === format)?.label || 'File',
@@ -97,9 +109,10 @@ export default function SaveAsModal({
         setFileName(pickedName.slice(0, -ext.length))
       }
       setError(null)
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        setError(`选择位置失败: ${err.message || '未知错误'}`)
+    } catch (err) {
+      const { name, message } = getErrorInfo(err)
+      if (name !== 'AbortError') {
+        setError(`选择位置失败: ${message}`)
       }
     } finally {
       setIsSelectingLocation(false)
@@ -111,12 +124,13 @@ export default function SaveAsModal({
 
     setIsSelectingLocation(true)
     try {
-      const dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite' })
+      const dirHandle = await (window as unknown as FilePickerWindow).showDirectoryPicker({ mode: 'readwrite' })
       setSaveLocation({ type: 'directory', handle: dirHandle, name: dirHandle.name })
       setError(null)
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        setError(`选择文件夹失败: ${err.message || '未知错误'}`)
+    } catch (err) {
+      const { name, message } = getErrorInfo(err)
+      if (name !== 'AbortError') {
+        setError(`选择文件夹失败: ${message}`)
       }
     } finally {
       setIsSelectingLocation(false)
@@ -191,12 +205,12 @@ export default function SaveAsModal({
         onSuccess(`文件已下载为 ${fullOutputName}`)
         onClose()
       }
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
+    } catch (err) {
+      const { name, message: msg } = getErrorInfo(err)
+      if (name === 'AbortError') {
         setIsSaving(false)
         return
       }
-      const msg = err.message || '未知错误'
       setError(`保存失败: ${msg}`)
       onError(`保存失败: ${msg}`)
     } finally {

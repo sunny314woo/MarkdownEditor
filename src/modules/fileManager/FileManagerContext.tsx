@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { FileNode, Tab, FileManagerState } from '../../types/fileManager';
 import { loadState, saveState, generateId, findNode, updateNodeContent, searchFiles } from './fileManagerUtils';
@@ -104,6 +105,8 @@ export const FileManagerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
 
     openFile(newFile.id);
+  // openFile 是下方声明的稳定 callback；这里保持原有文件创建后打开的行为。
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addChildNode]);
 
   // 创建文件夹

@@ -80,13 +80,7 @@ function SearchReplace({ content, onContentChange, onClose, mode, initialSearch 
     }
   }, [searchTerm, findMatches, currentMatchIndex])
 
-  useEffect(() => {
-    if (currentMatchIndex >= 0 && matches[currentMatchIndex]) {
-      highlightAndScroll(matches[currentMatchIndex])
-    }
-  }, [currentMatchIndex, matches])
-
-  const highlightAndScroll = (match: MatchResult) => {
+  const highlightAndScroll = useCallback((match: MatchResult) => {
     const textarea = document.querySelector('.editor-area') as HTMLTextAreaElement
     if (!textarea) return
 
@@ -100,7 +94,13 @@ function SearchReplace({ content, onContentChange, onClose, mode, initialSearch 
     const lineNumber = match.lineNumber - 1
     const scrollTop = Math.max(0, lineNumber * lineHeight - textarea.clientHeight / 2)
     textarea.scrollTo({ top: scrollTop, behavior: 'smooth' })
-  }
+  }, [searchTerm])
+
+  useEffect(() => {
+    if (currentMatchIndex >= 0 && matches[currentMatchIndex]) {
+      highlightAndScroll(matches[currentMatchIndex])
+    }
+  }, [currentMatchIndex, highlightAndScroll, matches])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()

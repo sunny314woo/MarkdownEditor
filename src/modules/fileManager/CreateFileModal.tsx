@@ -79,7 +79,7 @@ const CreateFileModal: React.FC<CreateFileModalProps> = ({
       setVisible(false)
       hasInitRef.current = false
     }
-  }, [isOpen])
+  }, [defaultFolderId, folders, isOpen])
 
   const handleFolderClick = useCallback((folderId: string, folderName: string) => {
     setSelectedFolderId(folderId)

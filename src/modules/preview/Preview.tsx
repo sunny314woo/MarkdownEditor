@@ -168,6 +168,7 @@ const Preview = forwardRef(function Preview(
           onContentChange(markdown)
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('HTML to Markdown conversion failed:', error)
       }
     }, 300)

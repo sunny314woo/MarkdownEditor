@@ -87,7 +87,9 @@ export async function saveBase64ToFile(
   if (!info) return null
 
   try {
-    const handle = await (window as any).showSaveFilePicker({
+    const handle = await (window as Window & {
+      showSaveFilePicker: (options?: ShowSaveFilePickerOptions) => Promise<FileSystemFileHandle>
+    }).showSaveFilePicker({
       suggestedName: suggestedName || `image.${info.extension}`,
       types: [{
         description: 'Image file',
@@ -109,8 +111,8 @@ export async function saveBase64ToFile(
       filePath: handle.name,
       fileName: handle.name,
     }
-  } catch (err: any) {
-    if (err.name === 'AbortError') return null
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') return null
     throw err
   }
 }

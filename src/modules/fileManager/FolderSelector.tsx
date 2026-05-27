@@ -62,7 +62,7 @@ const FolderSelector: React.FC<FolderSelectorProps> = ({
     if (!isOpen) {
       isFirstRender.current = true;
     }
-  }, [isOpen]);
+  }, [folders, isOpen, selectedFolderId]);
 
   const handleSelect = (folderId: string, _folderName: string) => {
     setSelectedId(folderId);

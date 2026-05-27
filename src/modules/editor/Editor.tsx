@@ -1,13 +1,14 @@
 import { useRef, useCallback, useState, useMemo, forwardRef, ForwardedRef, useEffect } from 'react'
 import { applyFormatAndUpdateCursor, formatBold, formatItalic, formatCodeBlock, formatInlineMath, formatBlockMath } from './markdownShortcuts'
 import { calculateStats, DocumentStats } from './stats'
-import { lintMarkdown, LintIssue } from '../lint/markdownLinter'
 import { insertFootnote } from './footnote'
 import { insertMath } from '../preview/mathUtils'
 import { findImageMarkRange, formatFileSize } from '../shared/imageHelpers'
-import { storeBase64Image, getBase64Image, isImagePlaceholder, getPlaceholderId, createPlaceholderUrl } from '../shared/imageStore'
-import { scrollToLine } from './editorHelpers'
+import { getBase64Image, isImagePlaceholder, getPlaceholderId } from '../shared/imageStore'
 import { useUndoRedo } from './UndoRedoContext'
+import { useEditorState } from './useEditorState'
+import { useImagePaste } from './useImagePaste'
+import { useLint } from './useLint'
 import {
   handleHeadingAutoSpace,
   handleBoldAutoClose,
@@ -28,9 +29,6 @@ import ScrollButtons from '../shared/ScrollButtons'
 import LintPopover from '../lint/LintPopover'
 import FrontMatterPanel from '../blog/FrontMatterPanel'
 
-type WordCountMode = 'text' | 'standard'
-type SearchMode = 'search' | 'replace' | null
-
 interface EditorProps {
   value: string
   onChange: (value: string) => void
@@ -43,9 +41,6 @@ interface EditorProps {
   onToggleTypewriterMode?: () => void
   fileId?: string | null
 }
-
-const MAX_IMAGE_SIZE = 2 * 1024 * 1024
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml']
 
 const Editor = forwardRef(function Editor(
   { value, onChange, onScroll, showPreview = true, onTogglePreview, focusMode = false, typewriterMode = false, onToggleFocusMode, onToggleTypewriterMode, fileId }: EditorProps,
@@ -66,36 +61,29 @@ const Editor = forwardRef(function Editor(
 
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [wordCountMode, setWordCountMode] = useState<WordCountMode>('text')
-  const [searchMode, setSearchMode] = useState<SearchMode>(null)
-  const [lintIssues, setLintIssues] = useState<LintIssue[]>([])
-  const [showSaveAsModal, setShowSaveAsModal] = useState(false)
-  const [showOptimizeModal, setShowOptimizeModal] = useState(false)
-  const [showFrontMatter, setShowFrontMatter] = useState(false)
-  const [largeImageConfirm, setLargeImageConfirm] = useState<{ file: File; onConfirm: () => void } | null>(null)
-  const lintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [scrollTop, setScrollTop] = useState(0)
-  const [showLintPopover, setShowLintPopover] = useState(false)
-  const lintAnchorRef = useRef<HTMLDivElement>(null)
-  const lintCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isInitialRender = useRef(true)
+  const {
+    wordCountMode,
+    searchMode,
+    setSearchMode,
+    showSaveAsModal,
+    setShowSaveAsModal,
+    showOptimizeModal,
+    setShowOptimizeModal,
+    showFrontMatter,
+    setShowFrontMatter,
+    scrollTop,
+    setScrollTop,
+    currentLineNumber,
+    updateCurrentLine,
+    toggleWordCountMode,
+  } = useEditorState(textareaRef)
 
   const undoRedo = useUndoRedo()
   const [canUndo, setCanUndo] = useState(false)
   const [canRedo, setCanRedo] = useState(false)
   const isUndoRedoRef = useRef(false)
   const typewriterScrollingRef = useRef(false)
-  const [currentLineNumber, setCurrentLineNumber] = useState(0)
-
-  const updateCurrentLine = useCallback(() => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    const cursorPos = textarea.selectionStart
-    const textBefore = textarea.value.substring(0, cursorPos)
-    const line = textBefore.split('\n').length
-    setCurrentLineNumber(line)
-  }, [])
 
   useEffect(() => {
     if (!fileId) return
@@ -113,6 +101,8 @@ const Editor = forwardRef(function Editor(
   useEffect(() => {
     if (!fileId) return
     undoRedo.initHistory(fileId, value)
+    // 只在切换文件时初始化历史；内容变化由 pushUndo 维护。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId])
 
   useEffect(() => {
@@ -207,7 +197,7 @@ const Editor = forwardRef(function Editor(
     if (onScroll) {
       onScroll(scrollPosition, e.currentTarget)
     }
-  }, [onScroll])
+  }, [onScroll, setScrollTop])
 
   useEffect(() => {
     if (isInitialRender.current) {
@@ -215,32 +205,33 @@ const Editor = forwardRef(function Editor(
         isInitialRender.current = false
       }, 100)
     }
-  }, [])
+  }, [setSearchMode])
 
   const stats = useMemo<DocumentStats>(() => {
     return calculateStats(value)
   }, [value])
 
-  useEffect(() => {
-    if (lintTimerRef.current) clearTimeout(lintTimerRef.current)
-    lintTimerRef.current = setTimeout(() => {
-      const issues = lintMarkdown(value)
-      setLintIssues(issues)
-    }, 500)
-    return () => {
-      if (lintTimerRef.current) clearTimeout(lintTimerRef.current)
-    }
-  }, [value])
-
-  const handleJumpToIssue = useCallback((issue: LintIssue) => {
-    if (!textareaRef.current || !scrollContainerRef.current) return
-    scrollToLine(textareaRef.current, scrollContainerRef.current, issue.line, issue.startCol)
-  }, [])
-
-  const handleFixIssue = useCallback((newContent: string) => {
+  const applyLintFix = useCallback((newContent: string) => {
     pushUndo(newContent, 'lint-fix')
     onChange(newContent)
   }, [onChange, pushUndo])
+
+  const {
+    lintIssues,
+    showLintPopover,
+    lintAnchorRef,
+    openLintPopover,
+    scheduleCloseLintPopover,
+    cancelCloseLintPopover,
+    closeLintPopover,
+    handleJumpToIssue,
+    handleFixIssue,
+  } = useLint({
+    content: value,
+    textareaRef,
+    scrollContainerRef,
+    onApplyFix: applyLintFix,
+  })
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
@@ -259,7 +250,7 @@ const Editor = forwardRef(function Editor(
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [])
+  }, [setSearchMode])
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = event.target.value
@@ -723,7 +714,7 @@ const Editor = forwardRef(function Editor(
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Home' || event.key === 'End' || event.key === 'PageUp' || event.key === 'PageDown') {
       setTimeout(() => updateCurrentLine(), 0)
     }
-  }, [handleUndo, handleRedo, typewriterMode, scrollToCursorCenter, onChange, pushUndo, handleInsertFootnote])
+  }, [handleUndo, handleRedo, typewriterMode, scrollToCursorCenter, onChange, pushUndo, handleInsertFootnote, setSearchMode, updateCurrentLine])
 
   const handleOpenFile = useCallback(() => {
     fileInputRef.current?.click()
@@ -765,7 +756,7 @@ const Editor = forwardRef(function Editor(
 
     reader.readAsText(file, 'UTF-8')
     event.target.value = ''
-  }, [onChange])
+  }, [onChange, pushUndo])
 
   const extractTitle = (content: string): string => {
     const lines = content.split('\n')
@@ -782,59 +773,11 @@ const Editor = forwardRef(function Editor(
     return name.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_')
   }
 
-  const toggleWordCountMode = useCallback(() => {
-    setWordCountMode(prev => prev === 'text' ? 'standard' : 'text')
-  }, [])
-
   const handleFormatApplied = useCallback(() => {
     if (textareaRef.current) {
       textareaRef.current.focus()
     }
   }, [])
-
-  const insertImageAtCursor = useCallback((imageUrl: string, altText: string) => {
-    const textarea = textareaRef.current
-    const scrollContainer = scrollContainerRef.current
-    if (!textarea) {
-      return
-    }
-
-    const savedScrollTop = scrollContainer ? scrollContainer.scrollTop : 0
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    
-    let displayUrl: string
-    if (imageUrl.startsWith('data:')) {
-      const imageId = storeBase64Image(imageUrl)
-      displayUrl = createPlaceholderUrl(imageId)
-    } else {
-      displayUrl = imageUrl
-    }
-    
-    const markdownImage = `![${altText}](${displayUrl})`
-    
-    const newValue = value.substring(0, start) + markdownImage + value.substring(end)
-    
-    try {
-      pushUndo(newValue, 'insert-image')
-      onChange(newValue)
-      
-      const restoreScrollPosition = () => {
-        if (textareaRef.current && scrollContainerRef.current) {
-          scrollContainerRef.current.scrollTop = savedScrollTop
-          textareaRef.current.focus()
-          const newCursorPos = start + markdownImage.length
-          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos)
-        }
-      }
-      
-      setTimeout(restoreScrollPosition, 50)
-      setTimeout(restoreScrollPosition, 100)
-    } catch (err) {
-      setError(`插入图片时发生错误: ${err instanceof Error ? err.message : '未知错误'}`)
-      setTimeout(() => setError(null), 5000)
-    }
-  }, [value, onChange, pushUndo])
 
   const escapeHtml = (text: string): string => {
     const div = document.createElement('div')
@@ -842,111 +785,24 @@ const Editor = forwardRef(function Editor(
     return div.innerHTML
   }
 
-  const processImageFile = useCallback((file: File) => {
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      setError(`不支持的图片格式: ${file.type}。仅支持 JPG、PNG、GIF、WebP、BMP、SVG 格式。`)
-      setTimeout(() => setError(null), 5000)
-      return
-    }
-
-    const isLargeFile = file.size > MAX_IMAGE_SIZE
-
-    const doInsert = () => {
-      const reader = new FileReader()
-
-      reader.onload = (e) => {
-        const base64Data = e.target?.result as string
-        if (base64Data) {
-          const altText = file.name.replace(/\.[^/.]+$/, '') || 'image'
-          insertImageAtCursor(base64Data, altText)
-          setSuccess(`图片 "${file.name}" 插入成功！`)
-          setTimeout(() => setSuccess(null), 3000)
-        }
-      }
-
-      reader.onerror = () => {
-        setError(`图片读取失败: ${reader.error?.message || '未知错误'}`)
-        setTimeout(() => setError(null), 5000)
-      }
-
-      reader.readAsDataURL(file)
-    }
-
-    if (isLargeFile) {
-      setLargeImageConfirm({ file, onConfirm: doInsert })
-      return
-    }
-
-    doInsert()
-  }, [insertImageAtCursor])
-
-  const handleImageFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) {
-      processImageFile(file)
-    }
-    event.target.value = ''
-  }, [processImageFile])
-
-  const handlePaste = useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = event.clipboardData.items
-    let imageFound = false
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
-
-      if (item.type.startsWith('image/')) {
-        event.preventDefault()
-        imageFound = true
-
-        const file = item.getAsFile()
-        if (file) {
-          processImageFile(file)
-        }
-        break
-      }
-    }
-
-    if (!imageFound) {
-      const files = event.clipboardData.files
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]
-        if (file.type.startsWith('image/')) {
-          event.preventDefault()
-          processImageFile(file)
-          break
-        }
-      }
-    }
-  }, [processImageFile])
-
-  const handleDragOver = useCallback((event: React.DragEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    setIsDragging(true)
-  }, [])
-
-  const handleDragLeave = useCallback((event: React.DragEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    setIsDragging(false)
-  }, [])
-
-  const handleDrop = useCallback((event: React.DragEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    setIsDragging(false)
-
-    const files = event.dataTransfer.files
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      if (file.type.startsWith('image/')) {
-        processImageFile(file)
-        break
-      }
-    }
-  }, [processImageFile])
+  const {
+    isDragging,
+    largeImageConfirm,
+    setLargeImageConfirm,
+    handleImageFileChange,
+    handlePaste,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+  } = useImagePaste({
+    value,
+    textareaRef,
+    scrollContainerRef,
+    onChange,
+    pushUndo,
+    setError,
+    setSuccess,
+  })
 
   const renderMarkdownForEditor = useMemo(() => {
     const lines = value.split('\n')
@@ -1367,18 +1223,8 @@ const Editor = forwardRef(function Editor(
               <div
                 ref={lintAnchorRef}
                 className="flex items-center gap-1 cursor-pointer lint-status-area"
-                onMouseEnter={() => {
-                  if (lintCloseTimerRef.current) {
-                    clearTimeout(lintCloseTimerRef.current)
-                    lintCloseTimerRef.current = null
-                  }
-                  setShowLintPopover(true)
-                }}
-                onMouseLeave={() => {
-                  lintCloseTimerRef.current = setTimeout(() => {
-                    setShowLintPopover(false)
-                  }, 300)
-                }}
+                onMouseEnter={openLintPopover}
+                onMouseLeave={scheduleCloseLintPopover}
               >
                 {lintIssues.filter(i => i.severity === 'error').length > 0 && (
                   <span className="flex items-center gap-1" style={{ color: '#ef4444', fontSize: '11px', fontWeight: 600 }}>
@@ -1523,18 +1369,9 @@ const Editor = forwardRef(function Editor(
         onFixIssue={handleFixIssue}
         anchorEl={lintAnchorRef.current}
         visible={showLintPopover}
-        onClose={() => setShowLintPopover(false)}
-        onMouseEnter={() => {
-          if (lintCloseTimerRef.current) {
-            clearTimeout(lintCloseTimerRef.current)
-            lintCloseTimerRef.current = null
-          }
-        }}
-        onMouseLeave={() => {
-          lintCloseTimerRef.current = setTimeout(() => {
-            setShowLintPopover(false)
-          }, 300)
-        }}
+        onClose={closeLintPopover}
+        onMouseEnter={cancelCloseLintPopover}
+        onMouseLeave={scheduleCloseLintPopover}
       />
     </div>
   )

@@ -104,11 +104,12 @@ export default function OptimizeImagesModal({
             )
           )
         }
-      } catch (err: any) {
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '保存失败'
         setImages((prev) =>
           prev.map((img, i) =>
             i === itemIndex
-              ? { ...img, status: 'error' as const, errorMsg: err.message || '保存失败' }
+              ? { ...img, status: 'error' as const, errorMsg: message }
               : img
           )
         )

@@ -61,6 +61,13 @@ const THEME_STYLE_OPTIONS: Array<{ key: ThemeStyle; label: string; desc: string;
 
 type LeftTab = 'style' | 'color' | 'content'
 
+function getErrorInfo(err: unknown): { name: string; message: string } {
+  if (err instanceof Error) {
+    return { name: err.name, message: err.message || '未知错误' }
+  }
+  return { name: '', message: '未知错误' }
+}
+
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -105,7 +112,11 @@ export default function BlogStudio({ isOpen, onClose, currentFile }: BlogStudioP
 
   const totalWordCount = useMemo(() => {
     return selectedMdFiles.reduce((sum, f) => {
-      const text = f.content.replace(/[#*_`~\[\]()>|+-]/g, '').trim()
+      const text = f.content
+        .replace(/[#*_`~()>|+-]/g, '')
+        .replace(/\[/g, '')
+        .replace(/\]/g, '')
+        .trim()
       return sum + text.length
     }, 0)
   }, [selectedMdFiles])
@@ -177,7 +188,7 @@ export default function BlogStudio({ isOpen, onClose, currentFile }: BlogStudioP
   useEffect(() => {
     if (!isOpen || selectedMdFiles.length === 0) return
     debouncedUpdatePreview(designConfig)
-  }, [selectedMdFiles])
+  }, [debouncedUpdatePreview, designConfig, isOpen, selectedMdFiles])
 
   useEffect(() => {
     if (!isOpen) return
@@ -195,8 +206,8 @@ export default function BlogStudio({ isOpen, onClose, currentFile }: BlogStudioP
       const blogConfig = designConfigToBlogConfig(designConfig)
       const genResult = generateBlog(selectedMdFiles, blogConfig)
       setResult(genResult)
-    } catch (err: any) {
-      const msg = err.message || '未知错误'
+    } catch (err) {
+      const { message: msg } = getErrorInfo(err)
       setError(`生成失败: ${msg}`)
     } finally {
       setIsGenerating(false)
@@ -209,12 +220,12 @@ export default function BlogStudio({ isOpen, onClose, currentFile }: BlogStudioP
     setError(null)
     try {
       await downloadBlogAsZip(result)
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
+    } catch (err) {
+      const { name, message: msg } = getErrorInfo(err)
+      if (name === 'AbortError') {
         setIsDownloading(false)
         return
       }
-      const msg = err.message || '未知错误'
       setError(`下载失败: ${msg}`)
     } finally {
       setIsDownloading(false)
@@ -252,8 +263,8 @@ export default function BlogStudio({ isOpen, onClose, currentFile }: BlogStudioP
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-    } catch (err: any) {
-      const msg = err.message || '未知错误'
+    } catch (err) {
+      const { message: msg } = getErrorInfo(err)
       setError(`下载失败: ${msg}`)
     } finally {
       setIsDownloading(false)

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 
 type ModalType = 'none' | 'input' | 'create-file';
@@ -45,8 +46,8 @@ export const ModalProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     defaultFolderId: 'root',
   });
 
-  const onInputConfirmRef = useRef<(value: string) => void>(() => {});
-  const onCreateFileConfirmRef = useRef<(fileName: string, folderId: string) => void>(() => {});
+  const onInputConfirmRef = useRef<(value: string) => void>(() => undefined);
+  const onCreateFileConfirmRef = useRef<(fileName: string, folderId: string) => void>(() => undefined);
 
   const closeModal = useCallback(() => {
     setModalState(prev => ({ ...prev, isOpen: false, type: 'none' }));
