@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import FootnoteSidebar from '../../components/FootnoteSidebar'
 import type { EditorFeatureConfig } from '../editor/editorFeatures'
 import Editor from '../editor/Editor'
@@ -9,36 +9,8 @@ import { useKaTeX } from '../preview/useKaTeX'
 import { useMarkdownRender } from '../preview/useMarkdownRender'
 import { useMermaid } from '../preview/useMermaid'
 import type { ThemeType } from '../settings/ThemeContext'
-
-export interface MarkdownEditorFeatureConfig extends EditorFeatureConfig {
-  previewPane?: boolean
-  outlinePane?: boolean
-  footnoteSidebar?: boolean
-  previewEditing?: boolean
-  imageDeletion?: boolean
-  themeToggle?: boolean
-}
-
-const DEFAULT_MARKDOWN_EDITOR_FEATURES: Required<MarkdownEditorFeatureConfig> = {
-  fileImport: true,
-  exportFile: true,
-  imageUpload: true,
-  imageOptimize: true,
-  frontMatter: true,
-  searchReplace: true,
-  footnotes: true,
-  previewToggle: true,
-  focusMode: true,
-  typewriterMode: true,
-  lint: true,
-  stats: true,
-  previewPane: true,
-  outlinePane: true,
-  footnoteSidebar: true,
-  previewEditing: true,
-  imageDeletion: true,
-  themeToggle: true,
-}
+import type { MarkdownEditorFeatureConfig } from './markdownEditorFeatures'
+import { resolveMarkdownEditorFeatures } from './markdownEditorFeatures'
 
 export interface MarkdownEditorProps {
   value: string
@@ -75,8 +47,8 @@ export default function MarkdownEditor({
   onDeleteImage,
   features: featureConfig,
 }: MarkdownEditorProps) {
-  const features = { ...DEFAULT_MARKDOWN_EDITOR_FEATURES, ...featureConfig }
-  const editorFeatures: EditorFeatureConfig = {
+  const features = useMemo(() => resolveMarkdownEditorFeatures(featureConfig), [featureConfig])
+  const editorFeatures: EditorFeatureConfig = useMemo(() => ({
     fileImport: features.fileImport,
     exportFile: features.exportFile,
     imageUpload: features.imageUpload,
@@ -89,7 +61,7 @@ export default function MarkdownEditor({
     typewriterMode: features.typewriterMode,
     lint: features.lint,
     stats: features.stats,
-  }
+  }), [features])
   const editorRef = useRef<HTMLTextAreaElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const { handleEditorScroll, handlePreviewScroll } = useScrollSync(editorRef, previewRef)
@@ -196,7 +168,7 @@ export default function MarkdownEditor({
   return (
     <div className="h-full min-h-0 overflow-hidden" style={{ display: 'grid', gridTemplateColumns: gridColumns }}>
       <div
-          className={`border-r min-h-0 overflow-hidden ${effectiveFocusMode ? 'focus-editor-container' : ''}`}
+        className={`border-r min-h-0 overflow-hidden ${effectiveFocusMode ? 'focus-editor-container' : ''}`}
         style={{
           borderColor: effectiveShowPreview ? 'var(--editor-border)' : 'transparent',
         }}
