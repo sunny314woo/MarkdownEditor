@@ -7,6 +7,7 @@ interface UseLintOptions {
   textareaRef: RefObject<HTMLTextAreaElement>
   scrollContainerRef: RefObject<HTMLDivElement>
   onApplyFix: (newContent: string) => void
+  enabled?: boolean
 }
 
 export function useLint({
@@ -14,6 +15,7 @@ export function useLint({
   textareaRef,
   scrollContainerRef,
   onApplyFix,
+  enabled = true,
 }: UseLintOptions) {
   const [lintIssues, setLintIssues] = useState<LintIssue[]>([])
   const [showLintPopover, setShowLintPopover] = useState(false)
@@ -22,6 +24,13 @@ export function useLint({
   const lintCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    if (!enabled) {
+      setLintIssues([])
+      setShowLintPopover(false)
+      if (lintTimerRef.current) clearTimeout(lintTimerRef.current)
+      return
+    }
+
     if (lintTimerRef.current) clearTimeout(lintTimerRef.current)
     lintTimerRef.current = setTimeout(() => {
       const issues = lintMarkdown(content)
@@ -31,7 +40,7 @@ export function useLint({
     return () => {
       if (lintTimerRef.current) clearTimeout(lintTimerRef.current)
     }
-  }, [content])
+  }, [content, enabled])
 
   useEffect(() => {
     return () => {

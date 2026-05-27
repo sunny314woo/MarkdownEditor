@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import TableToolbar from './TableToolbar'
 import MathPopover from './MathPopover'
 import ListMenuPopover from './ListMenuPopover'
+import type { EditorFeatureConfig } from '../editor/editorFeatures'
+import { resolveEditorFeatures } from '../editor/editorFeatures'
 
 interface ToolbarButtonProps {
   onClick: () => void
@@ -83,6 +85,7 @@ interface MarkdownToolbarProps {
   showPreview?: boolean
   onOptimizeImages?: () => void
   onOpenFrontMatter?: () => void
+  features?: EditorFeatureConfig
 }
 
 const EMOJI_LIST = [
@@ -121,7 +124,8 @@ const CODE_LANGUAGES = [
   { label: 'Markdown', value: 'markdown' },
 ]
 
-export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, onChange, canUndo = false, canRedo = false, onUndo, onRedo, onUploadImage, onSearchReplace, focusMode = false, typewriterMode = false, onToggleFocusMode, onToggleTypewriterMode, onInsertFootnote, onInsertInlineMath: _onInsertInlineMath, onInsertBlockMath: _onInsertBlockMath, onInsertMathTemplate, onOpenFile, onSaveAs, onTogglePreview, showPreview = true, onOptimizeImages, onOpenFrontMatter }: MarkdownToolbarProps) {
+export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, onChange, canUndo = false, canRedo = false, onUndo, onRedo, onUploadImage, onSearchReplace, focusMode = false, typewriterMode = false, onToggleFocusMode, onToggleTypewriterMode, onInsertFootnote, onInsertInlineMath: _onInsertInlineMath, onInsertBlockMath: _onInsertBlockMath, onInsertMathTemplate, onOpenFile, onSaveAs, onTogglePreview, showPreview = true, onOptimizeImages, onOpenFrontMatter, features: featureConfig }: MarkdownToolbarProps) {
+  const features = resolveEditorFeatures(featureConfig)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
     const [showCodeLangPicker, setShowCodeLangPicker] = useState(false)
     const [mathPopoverMode, setMathPopoverMode] = useState<'inline' | 'block' | null>(null)
@@ -652,15 +656,17 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
         </svg>
       </ToolbarButton>
 
-      <ToolbarButton
-        onClick={onInsertFootnote || noop}
-        title="插入脚注 (Ctrl+Shift+N)"
-        ariaLabel="插入脚注"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-        </svg>
-      </ToolbarButton>
+      {features.footnotes && (
+        <ToolbarButton
+          onClick={onInsertFootnote || noop}
+          title="插入脚注 (Ctrl+Shift+N)"
+          ariaLabel="插入脚注"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+          </svg>
+        </ToolbarButton>
+      )}
 
       <ToolbarButton
         onClick={() => setMathPopoverMode(mathPopoverMode === 'inline' ? null : 'inline')}
@@ -826,150 +832,168 @@ export default function MarkdownToolbar({ textareaRef, onFormatApplied, value, o
 
       <div style={{ width: '1px', height: '20px', borderRadius: '1px', backgroundColor: 'var(--editor-border)', margin: '0 6px' }} />
 
-      <ToolbarButton
-        onClick={onUploadImage || noop}
-        title="上传图片"
-        ariaLabel="上传图片"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      </ToolbarButton>
+      {features.imageUpload && (
+        <ToolbarButton
+          onClick={onUploadImage || noop}
+          title="上传图片"
+          ariaLabel="上传图片"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </ToolbarButton>
+      )}
 
-      <ToolbarButton
-        onClick={onOptimizeImages || noop}
-        title="优化图片 (Base64 转本地文件)"
-        ariaLabel="优化图片"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-        </svg>
-      </ToolbarButton>
+      {features.imageOptimize && (
+        <ToolbarButton
+          onClick={onOptimizeImages || noop}
+          title="优化图片 (Base64 转本地文件)"
+          ariaLabel="优化图片"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+        </ToolbarButton>
+      )}
 
-      <ToolbarButton
-        onClick={onSearchReplace || noop}
-        title="搜索与替换 (Ctrl+F)"
-        ariaLabel="搜索与替换"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-      </ToolbarButton>
+      {features.searchReplace && (
+        <ToolbarButton
+          onClick={onSearchReplace || noop}
+          title="搜索与替换 (Ctrl+F)"
+          ariaLabel="搜索与替换"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </ToolbarButton>
+      )}
 
       <div className="flex-1" />
 
       <div style={{ width: '1px', height: '20px', borderRadius: '1px', backgroundColor: 'var(--editor-border)', margin: '0 6px' }} />
 
-      <ToolbarButton
-        onClick={onOpenFile || noop}
-        title="打开文件"
-        ariaLabel="打开 Markdown 文件"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-        </svg>
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={onSaveAs || noop}
-        title="另存为"
-        ariaLabel="另存为"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-        </svg>
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={onOpenFrontMatter || noop}
-        title="文章元信息"
-        ariaLabel="文章元信息"
-      >
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      </ToolbarButton>
-
-      <ToolbarButton
-        onClick={onTogglePreview || noop}
-        title={showPreview ? '关闭预览' : '打开预览'}
-        ariaLabel={showPreview ? '关闭预览' : '打开预览'}
-      >
-        {showPreview ? (
+      {features.fileImport && (
+        <ToolbarButton
+          onClick={onOpenFile || noop}
+          title="打开文件"
+          ariaLabel="打开 Markdown 文件"
+        >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
-        ) : (
+        </ToolbarButton>
+      )}
+
+      {features.exportFile && (
+        <ToolbarButton
+          onClick={onSaveAs || noop}
+          title="另存为"
+          ariaLabel="另存为"
+        >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
           </svg>
-        )}
-      </ToolbarButton>
+        </ToolbarButton>
+      )}
+
+      {features.frontMatter && (
+        <ToolbarButton
+          onClick={onOpenFrontMatter || noop}
+          title="文章元信息"
+          ariaLabel="文章元信息"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </ToolbarButton>
+      )}
+
+      {features.previewToggle && (
+        <ToolbarButton
+          onClick={onTogglePreview || noop}
+          title={showPreview ? '关闭预览' : '打开预览'}
+          ariaLabel={showPreview ? '关闭预览' : '打开预览'}
+        >
+          {showPreview ? (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          )}
+        </ToolbarButton>
+      )}
 
       <div style={{ width: '1px', height: '20px', borderRadius: '1px', backgroundColor: 'var(--editor-border)', margin: '0 6px' }} />
 
-      <button
-        onClick={onToggleFocusMode}
-        className="flex items-center gap-1"
-        style={{
-          padding: '4px 10px',
-          borderRadius: '6px',
-          fontSize: '11px',
-          fontWeight: 500,
-          fontFamily: "'Inter', -apple-system, sans-serif",
-          transition: 'all 0.15s ease',
-          backgroundColor: focusMode ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-          color: focusMode ? 'var(--link-color)' : 'var(--editor-text)',
-          border: focusMode ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid var(--editor-border)',
-          cursor: 'pointer',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.border = '1px solid rgba(59, 130, 246, 0.3)';
-          if (!focusMode) e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.06)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.border = focusMode ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid var(--editor-border)';
-          e.currentTarget.style.backgroundColor = focusMode ? 'rgba(59, 130, 246, 0.1)' : 'transparent';
-        }}
-        title="专注模式 (Ctrl+Shift+F)"
-      >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" />
-        </svg>
-        <span>专注</span>
-      </button>
+      {features.focusMode && (
+        <button
+          onClick={onToggleFocusMode}
+          className="flex items-center gap-1"
+          style={{
+            padding: '4px 10px',
+            borderRadius: '6px',
+            fontSize: '11px',
+            fontWeight: 500,
+            fontFamily: "'Inter', -apple-system, sans-serif",
+            transition: 'all 0.15s ease',
+            backgroundColor: focusMode ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+            color: focusMode ? 'var(--link-color)' : 'var(--editor-text)',
+            border: focusMode ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid var(--editor-border)',
+            cursor: 'pointer',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+            if (!focusMode) e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.06)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.border = focusMode ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid var(--editor-border)';
+            e.currentTarget.style.backgroundColor = focusMode ? 'rgba(59, 130, 246, 0.1)' : 'transparent';
+          }}
+          title="专注模式 (Ctrl+Shift+F)"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h8m-8 6h16" />
+          </svg>
+          <span>专注</span>
+        </button>
+      )}
 
-      <button
-        onClick={onToggleTypewriterMode}
-        className="flex items-center gap-1"
-        style={{
-          padding: '4px 10px',
-          borderRadius: '6px',
-          fontSize: '11px',
-          fontWeight: 500,
-          fontFamily: "'Inter', -apple-system, sans-serif",
-          transition: 'all 0.15s ease',
-          backgroundColor: typewriterMode ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-          color: typewriterMode ? 'var(--link-color)' : 'var(--editor-text)',
-          border: typewriterMode ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid var(--editor-border)',
-          cursor: 'pointer',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.border = '1px solid rgba(59, 130, 246, 0.3)';
-          if (!typewriterMode) e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.06)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.border = typewriterMode ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid var(--editor-border)';
-          e.currentTarget.style.backgroundColor = typewriterMode ? 'rgba(59, 130, 246, 0.1)' : 'transparent';
-        }}
-        title="打字机模式 (Ctrl+Shift+T)"
-      >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h8" />
-        </svg>
-        <span>打字机</span>
-      </button>
+      {features.typewriterMode && (
+        <button
+          onClick={onToggleTypewriterMode}
+          className="flex items-center gap-1"
+          style={{
+            padding: '4px 10px',
+            borderRadius: '6px',
+            fontSize: '11px',
+            fontWeight: 500,
+            fontFamily: "'Inter', -apple-system, sans-serif",
+            transition: 'all 0.15s ease',
+            backgroundColor: typewriterMode ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+            color: typewriterMode ? 'var(--link-color)' : 'var(--editor-text)',
+            border: typewriterMode ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid var(--editor-border)',
+            cursor: 'pointer',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+            if (!typewriterMode) e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.06)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.border = typewriterMode ? '1px solid rgba(59, 130, 246, 0.2)' : '1px solid var(--editor-border)';
+            e.currentTarget.style.backgroundColor = typewriterMode ? 'rgba(59, 130, 246, 0.1)' : 'transparent';
+          }}
+          title="打字机模式 (Ctrl+Shift+T)"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h8" />
+          </svg>
+          <span>打字机</span>
+        </button>
+      )}
     </div>
   )
 }

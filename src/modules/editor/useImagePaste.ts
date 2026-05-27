@@ -17,6 +17,7 @@ interface UseImagePasteOptions {
   pushUndo: (newValue: string, groupKey?: string) => void
   setError: (message: string | null) => void
   setSuccess: (message: string | null) => void
+  enabled?: boolean
 }
 
 export function useImagePaste({
@@ -27,6 +28,7 @@ export function useImagePaste({
   pushUndo,
   setError,
   setSuccess,
+  enabled = true,
 }: UseImagePasteOptions) {
   const [isDragging, setIsDragging] = useState(false)
   const [largeImageConfirm, setLargeImageConfirm] = useState<LargeImageConfirm | null>(null)
@@ -83,6 +85,8 @@ export function useImagePaste({
   }, [clearErrorLater, onChange, pushUndo, scrollContainerRef, setError, textareaRef, value])
 
   const processImageFile = useCallback((file: File) => {
+    if (!enabled) return
+
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setError(`不支持的图片格式: ${file.type}。仅支持 JPG、PNG、GIF、WebP、BMP、SVG 格式。`)
       clearErrorLater()
@@ -118,17 +122,19 @@ export function useImagePaste({
     }
 
     doInsert()
-  }, [clearErrorLater, clearSuccessLater, insertImageAtCursor, setError, setSuccess])
+  }, [clearErrorLater, clearSuccessLater, enabled, insertImageAtCursor, setError, setSuccess])
 
   const handleImageFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!enabled) return
     const file = event.target.files?.[0]
     if (file) {
       processImageFile(file)
     }
     event.target.value = ''
-  }, [processImageFile])
+  }, [enabled, processImageFile])
 
   const handlePaste = useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!enabled) return
     const items = event.clipboardData.items
     let imageFound = false
 
@@ -158,21 +164,24 @@ export function useImagePaste({
         }
       }
     }
-  }, [processImageFile])
+  }, [enabled, processImageFile])
 
   const handleDragOver = useCallback((event: React.DragEvent) => {
+    if (!enabled) return
     event.preventDefault()
     event.stopPropagation()
     setIsDragging(true)
-  }, [])
+  }, [enabled])
 
   const handleDragLeave = useCallback((event: React.DragEvent) => {
+    if (!enabled) return
     event.preventDefault()
     event.stopPropagation()
     setIsDragging(false)
-  }, [])
+  }, [enabled])
 
   const handleDrop = useCallback((event: React.DragEvent) => {
+    if (!enabled) return
     event.preventDefault()
     event.stopPropagation()
     setIsDragging(false)
@@ -186,7 +195,7 @@ export function useImagePaste({
         break
       }
     }
-  }, [processImageFile])
+  }, [enabled, processImageFile])
 
   return {
     isDragging,

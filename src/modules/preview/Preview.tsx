@@ -6,10 +6,12 @@ import ScrollButtons from '../shared/ScrollButtons'
 interface PreviewProps {
   content: string
   theme: ThemeType
-  onToggleTheme: () => void
+  onToggleTheme?: () => void
   onScroll?: (scrollPosition: number, element: HTMLElement) => void
   onContentChange?: (markdown: string) => void
   onDeleteImage?: (imageIndex: number) => void
+  editable?: boolean
+  showThemeToggle?: boolean
 }
 
 const copyToClipboard = async (text: string): Promise<void> => {
@@ -35,7 +37,7 @@ const copyToClipboard = async (text: string): Promise<void> => {
 }
 
 const Preview = forwardRef(function Preview(
-  { content, theme, onToggleTheme, onScroll, onContentChange, onDeleteImage }: PreviewProps,
+  { content, theme, onToggleTheme, onScroll, onContentChange, onDeleteImage, editable = true, showThemeToggle = true }: PreviewProps,
   ref: ForwardedRef<HTMLDivElement>
 ) {
   const previewContainerRef = useRef<HTMLDivElement>(null)
@@ -152,7 +154,7 @@ const Preview = forwardRef(function Preview(
   const originalHtmlRef = useRef('')
 
   const handleContentInput = useCallback(() => {
-    if (!onContentChange || isSyncing) return
+    if (!editable || !onContentChange || isSyncing) return
 
     const debounceTimer = setTimeout(() => {
       if (!previewContainerRef.current || !turndownServiceRef.current) return
@@ -174,7 +176,7 @@ const Preview = forwardRef(function Preview(
     }, 300)
 
     return () => clearTimeout(debounceTimer)
-  }, [onContentChange, isSyncing])
+  }, [editable, onContentChange, isSyncing])
 
   const attachDeleteButtons = useCallback(() => {
     const container = previewContainerRef.current
@@ -365,31 +367,33 @@ const Preview = forwardRef(function Preview(
         <div className="flex items-center gap-3">
           <div style={{ width: '3px', height: '16px', borderRadius: '2px', background: 'linear-gradient(to bottom, var(--button-primary), #a78bfa)' }} />
           <span style={{ color: 'var(--toolbar-text)', fontSize: '13px', fontWeight: 600, letterSpacing: '0.05em' }}>Preview</span>
-          <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="transition-all duration-200"
-            style={{
-              padding: '4px 12px',
-              borderRadius: '6px',
-              fontSize: '12px',
-              backgroundColor: isEditing ? 'var(--button-primary)' : 'rgba(59, 130, 246, 0.08)',
-              border: isEditing ? 'none' : '1px solid rgba(59, 130, 246, 0.15)',
-              color: isEditing ? 'white' : 'var(--button-primary)',
-              cursor: 'pointer',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = isEditing ? 'var(--button-primary)' : 'rgba(59, 130, 246, 0.15)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = isEditing ? 'var(--button-primary)' : 'rgba(59, 130, 246, 0.08)'
-            }}
-            aria-label={isEditing ? '退出编辑模式' : '进入编辑模式'}
-            title={isEditing ? '退出编辑模式' : '进入编辑模式'}
-          >
-            {isEditing ? '编辑中' : '编辑'}
-          </button>
+          {editable && (
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className="transition-all duration-200"
+              style={{
+                padding: '4px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                backgroundColor: isEditing ? 'var(--button-primary)' : 'rgba(59, 130, 246, 0.08)',
+                border: isEditing ? 'none' : '1px solid rgba(59, 130, 246, 0.15)',
+                color: isEditing ? 'white' : 'var(--button-primary)',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = isEditing ? 'var(--button-primary)' : 'rgba(59, 130, 246, 0.15)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = isEditing ? 'var(--button-primary)' : 'rgba(59, 130, 246, 0.08)'
+              }}
+              aria-label={isEditing ? '退出编辑模式' : '进入编辑模式'}
+              title={isEditing ? '退出编辑模式' : '进入编辑模式'}
+            >
+              {isEditing ? '编辑中' : '编辑'}
+            </button>
+          )}
         </div>
-        <button
+        {showThemeToggle && onToggleTheme && <button
           onClick={onToggleTheme}
           className="flex items-center justify-center transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2"
           style={{
@@ -426,7 +430,7 @@ const Preview = forwardRef(function Preview(
               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
             </svg>
           )}
-        </button>
+        </button>}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(to right, var(--button-primary), #a78bfa, #f472b6)' }} />
       </div>
       <div className="relative flex-1 overflow-hidden">
@@ -435,7 +439,7 @@ const Preview = forwardRef(function Preview(
           className="preview-container h-full overflow-y-auto px-6 py-4 markdown-preview"
           data-theme={theme}
           onScroll={handlePreviewScroll}
-          contentEditable={isEditing}
+          contentEditable={editable && isEditing}
           suppressContentEditableWarning={true}
           onInput={handleContentInput}
         />

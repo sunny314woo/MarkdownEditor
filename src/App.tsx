@@ -1,13 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import 'katex/dist/katex.min.css';
-import Editor from './modules/editor/Editor';
-import Preview from './modules/preview/Preview';
-import Outline from './modules/outline/Outline';
-import { useScrollSync } from './modules/editor/useScrollSync';
-import { useKaTeX } from './modules/preview/useKaTeX';
-import { useMarkdownRender } from './modules/preview/useMarkdownRender';
-import { useMermaid } from './modules/preview/useMermaid';
-import FootnoteSidebar from './components/FootnoteSidebar';
+import MarkdownEditor from './modules/markdownEditor/MarkdownEditor';
 import Sidebar from './modules/fileManager/Sidebar';
 import TabBar from './components/TabBar';
 import InputModal from './modules/shared/InputModal';
@@ -104,11 +97,6 @@ const AppContent: React.FC = () => {
   const savedOutlineRef = useRef(showOutline);
   const savedPreviewRef = useRef(showPreview);
 
-  const editorRef = useRef<HTMLTextAreaElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
-  const isPreviewEditingRef = useRef(false);
-  const { handleEditorScroll, handlePreviewScroll } = useScrollSync(editorRef, previewRef);
-
   const toggleOutline = useCallback(() => {
     setShowOutline(prev => {
       const next = !prev;
@@ -172,8 +160,6 @@ const AppContent: React.FC = () => {
   }, [activeFileId, updateFileContent]);
 
   const handlePreviewContentChange = useCallback((newMarkdown: string) => {
-    isPreviewEditingRef.current = true;
-    
     const convertedMarkdown = textFromStorage(newMarkdown);
     
     if (convertedMarkdown && convertedMarkdown !== localContent && activeFileId) {
@@ -181,10 +167,6 @@ const AppContent: React.FC = () => {
       setLocalContent(convertedMarkdown);
       updateFileContent(activeFileId, textToStorage(convertedMarkdown));
     }
-    
-    setTimeout(() => {
-      isPreviewEditingRef.current = false;
-    }, 100);
   }, [localContent, activeFileId, updateFileContent, undoRedo]);
 
   const handleDeleteImage = useCallback((imageIndex: number) => {
@@ -233,103 +215,6 @@ const AppContent: React.FC = () => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [toggleTypewriterMode]);
 
-  const { html: baseHtml } = useMarkdownRender(localContent);
-  const { renderedHtml } = useKaTeX(baseHtml);
-  useMermaid(renderedHtml, localContent, theme);
-
-  const [highlightedHeading, setHighlightedHeading] = useState<string | null>(null);
-  const [scrollActiveHeading, setScrollActiveHeading] = useState<string | null>(null);
-  
-  const handlePreviewScrollWithDetection = useCallback((scrollTop: number, previewElement: HTMLElement) => {
-    handlePreviewScroll(scrollTop, previewElement);
-    
-    const headings = document.querySelectorAll('.heading-link') as NodeListOf<HTMLElement>;
-    let visibleHeading: string | null = null;
-    
-    for (const heading of headings) {
-      const relativeTop = heading.offsetTop - previewElement.scrollTop;
-      if (relativeTop <= previewElement.clientHeight * 0.3 && relativeTop + heading.clientHeight >= 0) {
-        visibleHeading = heading.id;
-        break;
-      }
-    }
-    
-    if (visibleHeading && visibleHeading !== scrollActiveHeading) {
-      setScrollActiveHeading(visibleHeading);
-    }
-  }, [handlePreviewScroll, scrollActiveHeading]);
-  
-  const handleOutlineClick = useCallback((headingId: string) => {
-    if (!previewRef.current) return;
-    
-    const element = document.getElementById(headingId);
-    if (element && previewRef.current) {
-      const prevHighlighted = document.querySelector('.heading-highlight');
-      if (prevHighlighted) {
-        prevHighlighted.classList.remove('heading-highlight');
-      }
-      
-      const previewContainer = previewRef.current;
-      const elementRect = element.getBoundingClientRect();
-      const containerRect = previewContainer.getBoundingClientRect();
-      
-      const scrollTop = elementRect.top - containerRect.top + previewContainer.scrollTop - 20;
-      
-      previewContainer.scrollTo({
-        top: scrollTop,
-        behavior: 'smooth'
-      });
-      
-      element.classList.add('heading-highlight');
-      setHighlightedHeading(headingId);
-      
-      setTimeout(() => {
-        element.classList.remove('heading-highlight');
-        if (highlightedHeading === headingId) {
-          setHighlightedHeading(null);
-        }
-      }, 3000);
-    }
-  }, [highlightedHeading]);
-
-  const [activeFootnoteId, setActiveFootnoteId] = useState<string | null>(null);
-
-  const handleFootnoteClick = useCallback((footnoteId: string, _line: number) => {
-    if (!previewRef.current) return;
-
-    const refElement = document.getElementById(`footnote-ref-${footnoteId}`);
-    const defElement = document.getElementById(`footnote-${footnoteId}`);
-    const targetElement = refElement || defElement;
-
-    if (targetElement && previewRef.current) {
-      const prevHighlighted = document.querySelector('.footnote-highlight');
-      if (prevHighlighted) {
-        prevHighlighted.classList.remove('footnote-highlight');
-      }
-
-      const previewContainer = previewRef.current;
-      const elementRect = targetElement.getBoundingClientRect();
-      const containerRect = previewContainer.getBoundingClientRect();
-
-      const scrollTop = elementRect.top - containerRect.top + previewContainer.scrollTop - 40;
-
-      previewContainer.scrollTo({
-        top: scrollTop,
-        behavior: 'smooth'
-      });
-
-      targetElement.classList.add('footnote-highlight');
-      setActiveFootnoteId(footnoteId);
-
-      setTimeout(() => {
-        targetElement.classList.remove('footnote-highlight');
-        if (activeFootnoteId === footnoteId) {
-          setActiveFootnoteId(null);
-        }
-      }, 3000);
-    }
-  }, [activeFootnoteId]);
-
   const handleCreateFileWithSelect = useCallback(() => {
     openCreateFileModal({
       defaultFolderId: 'root',
@@ -341,13 +226,6 @@ const AppContent: React.FC = () => {
 
   const effectiveSidebarVisible = focusMode ? false : sidebarVisible;
   const effectiveShowOutline = focusMode ? false : showOutline;
-  const effectiveShowPreview = focusMode ? false : showPreview;
-
-  const gridColumns = focusMode
-    ? '1fr'
-    : (effectiveShowPreview
-        ? (effectiveShowOutline ? '1fr 1fr 200px' : '1fr 1fr')
-        : (effectiveShowOutline ? '1fr 200px' : '1fr'));
 
   const handleAnchorClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -382,52 +260,24 @@ const AppContent: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {!focusMode && tabs.length > 0 && <TabBar />}
         
-        <div className="flex-1 overflow-hidden min-h-0" style={{ display: 'grid', gridTemplateColumns: tabs.length > 0 ? gridColumns : '1fr' }}>
+        <div className="flex-1 overflow-hidden min-h-0">
           {tabs.length > 0 ? (
-            <>
-              <div 
-                className={`border-r min-h-0 overflow-hidden ${focusMode ? 'focus-editor-container' : ''}`}
-                style={{ 
-                  borderColor: effectiveShowPreview ? 'var(--editor-border)' : 'transparent'
-                }}
-              >
-                <Editor value={localContent} onChange={handleChange} ref={editorRef} onScroll={handleEditorScroll} showPreview={effectiveShowPreview} onTogglePreview={togglePreview} focusMode={focusMode} typewriterMode={typewriterMode} onToggleFocusMode={toggleFocusMode} onToggleTypewriterMode={toggleTypewriterMode} fileId={activeFileId} />
-              </div>
-              
-              {effectiveShowPreview && (
-                <div className="min-h-0 overflow-hidden">
-                  <Preview 
-                    content={renderedHtml} 
-                    theme={theme} 
-                    onToggleTheme={toggleTheme} 
-                    ref={previewRef} 
-                    onScroll={handlePreviewScrollWithDetection}
-                    onContentChange={handlePreviewContentChange}
-                    onDeleteImage={handleDeleteImage}
-                  />
-                </div>
-              )}
-              
-              {effectiveShowOutline && (
-                <div
-                  className="border-l flex flex-col min-h-0 overflow-hidden"
-                  style={{ borderColor: 'var(--sidebar-border)' }}
-                >
-                  <div className="flex-1 overflow-hidden flex flex-col">
-                    <Outline
-                      content={localContent}
-                      onHeadingClick={handleOutlineClick}
-                      activeHeadingId={highlightedHeading || scrollActiveHeading}
-                    />
-                  </div>
-                  <FootnoteSidebar
-                    content={localContent}
-                    onFootnoteClick={handleFootnoteClick}
-                    activeFootnoteId={activeFootnoteId}
-                  />
-                </div>
-              )}
-            </>
+            <MarkdownEditor
+              value={localContent}
+              onChange={handleChange}
+              fileId={activeFileId}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+              showPreview={showPreview}
+              showOutline={showOutline}
+              focusMode={focusMode}
+              typewriterMode={typewriterMode}
+              onTogglePreview={togglePreview}
+              onToggleFocusMode={toggleFocusMode}
+              onToggleTypewriterMode={toggleTypewriterMode}
+              onPreviewContentChange={handlePreviewContentChange}
+              onDeleteImage={handleDeleteImage}
+            />
           ) : (
             <WelcomePage
               onCreateFile={handleCreateFileWithSelect}

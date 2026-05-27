@@ -6,6 +6,8 @@ import { insertMath } from '../preview/mathUtils'
 import { findImageMarkRange, formatFileSize } from '../shared/imageHelpers'
 import { getBase64Image, isImagePlaceholder, getPlaceholderId } from '../shared/imageStore'
 import { useUndoRedo } from './UndoRedoContext'
+import type { EditorFeatureConfig } from './editorFeatures'
+import { resolveEditorFeatures } from './editorFeatures'
 import { useEditorState } from './useEditorState'
 import { useImagePaste } from './useImagePaste'
 import { useLint } from './useLint'
@@ -40,12 +42,14 @@ interface EditorProps {
   onToggleFocusMode?: () => void
   onToggleTypewriterMode?: () => void
   fileId?: string | null
+  features?: EditorFeatureConfig
 }
 
 const Editor = forwardRef(function Editor(
-  { value, onChange, onScroll, showPreview = true, onTogglePreview, focusMode = false, typewriterMode = false, onToggleFocusMode, onToggleTypewriterMode, fileId }: EditorProps,
+  { value, onChange, onScroll, showPreview = true, onTogglePreview, focusMode = false, typewriterMode = false, onToggleFocusMode, onToggleTypewriterMode, fileId, features: featureConfig }: EditorProps,
   ref: ForwardedRef<HTMLTextAreaElement>
 ) {
+  const features = resolveEditorFeatures(featureConfig)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -231,18 +235,19 @@ const Editor = forwardRef(function Editor(
     textareaRef,
     scrollContainerRef,
     onApplyFix: applyLintFix,
+    enabled: features.lint,
   })
 
   useEffect(() => {
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
       const isCtrlOrCmd = event.ctrlKey || event.metaKey
 
-      if (isCtrlOrCmd && event.key === 'f') {
+      if (features.searchReplace && isCtrlOrCmd && event.key === 'f') {
         event.preventDefault()
         setSearchMode('search')
       }
 
-      if (isCtrlOrCmd && event.shiftKey && event.key === 'H') {
+      if (features.searchReplace && isCtrlOrCmd && event.shiftKey && event.key === 'H') {
         event.preventDefault()
         setSearchMode('replace')
       }
@@ -250,14 +255,14 @@ const Editor = forwardRef(function Editor(
 
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [setSearchMode])
+  }, [features.searchReplace, setSearchMode])
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = event.target.value
     pushUndo(newValue, 'typing')
     onChange(newValue)
     updateCurrentLine()
-    if (typewriterMode) {
+    if (features.typewriterMode && typewriterMode) {
       requestAnimationFrame(() => scrollToCursorCenter())
     }
   }
@@ -301,7 +306,7 @@ const Editor = forwardRef(function Editor(
       return
     }
 
-    if (isCtrlOrCmd && event.shiftKey && event.key === 'N') {
+    if (features.footnotes && isCtrlOrCmd && event.shiftKey && event.key === 'N') {
       event.preventDefault()
       handleInsertFootnote()
       return
@@ -323,13 +328,13 @@ const Editor = forwardRef(function Editor(
       return
     }
 
-    if (isCtrlOrCmd && event.key === 'f') {
+    if (features.searchReplace && isCtrlOrCmd && event.key === 'f') {
       event.preventDefault()
       setSearchMode('replace')
       return
     }
 
-    if (isCtrlOrCmd && event.shiftKey && event.key === 'H') {
+    if (features.searchReplace && isCtrlOrCmd && event.shiftKey && event.key === 'H') {
       event.preventDefault()
       setSearchMode('replace')
       return
@@ -707,14 +712,14 @@ const Editor = forwardRef(function Editor(
       }
     }
 
-    if (typewriterMode && (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Home' || event.key === 'End' || event.key === 'PageUp' || event.key === 'PageDown')) {
+    if (features.typewriterMode && typewriterMode && (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Home' || event.key === 'End' || event.key === 'PageUp' || event.key === 'PageDown')) {
       setTimeout(() => scrollToCursorCenter(), 0)
     }
 
     if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Home' || event.key === 'End' || event.key === 'PageUp' || event.key === 'PageDown') {
       setTimeout(() => updateCurrentLine(), 0)
     }
-  }, [handleUndo, handleRedo, typewriterMode, scrollToCursorCenter, onChange, pushUndo, handleInsertFootnote, setSearchMode, updateCurrentLine])
+  }, [features.footnotes, features.searchReplace, features.typewriterMode, handleUndo, handleRedo, typewriterMode, scrollToCursorCenter, onChange, pushUndo, handleInsertFootnote, setSearchMode, updateCurrentLine])
 
   const handleOpenFile = useCallback(() => {
     fileInputRef.current?.click()
@@ -802,6 +807,7 @@ const Editor = forwardRef(function Editor(
     pushUndo,
     setError,
     setSuccess,
+    enabled: features.imageUpload,
   })
 
   const renderMarkdownForEditor = useMemo(() => {
@@ -919,6 +925,7 @@ const Editor = forwardRef(function Editor(
           showPreview={showPreview}
           onOptimizeImages={() => setShowOptimizeModal(true)}
           onOpenFrontMatter={() => setShowFrontMatter(true)}
+          features={features}
         />
       )}
 
@@ -1017,7 +1024,7 @@ const Editor = forwardRef(function Editor(
         </div>
       )}
 
-      {searchMode && (
+      {features.searchReplace && searchMode && (
         <SearchReplace
           content={value}
           onContentChange={(newContent) => {
@@ -1174,50 +1181,54 @@ const Editor = forwardRef(function Editor(
           style={{ height: '1px', background: 'linear-gradient(to right, var(--button-primary), #a78bfa, #f472b6)' }}
         />
         <div className="flex items-center gap-3">
-          <div
-            style={{
-              width: '4px',
-              height: '4px',
-              transform: 'rotate(45deg)',
-              backgroundColor: 'var(--button-primary)',
-              marginRight: '8px',
-              flexShrink: 0
-            }}
-          />
-          <div className="flex items-center gap-1">
-            <span style={{ opacity: 0.5, fontSize: '11px' }}>字数:</span>
-            <span style={{ fontWeight: 600, fontSize: '11px' }}>{currentWordCount}</span>
-            <button
-              onClick={toggleWordCountMode}
-              className="transition-colors"
-              style={{
-                borderRadius: '4px',
-                padding: '2px 8px',
-                background: 'rgba(59, 130, 246, 0.08)',
-                border: '1px solid rgba(59, 130, 246, 0.15)',
-                fontSize: '10px',
-                fontWeight: 500,
-                color: 'var(--editor-text)',
-                cursor: 'pointer'
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.08)' }}
-              title={wordCountMode === 'text' ? '切换到标准模式（包含空格）' : '切换到纯文本模式（不含空格）'}
-            >
-              {wordCountMode === 'text' ? '纯文本' : '标准'}
-            </button>
-          </div>
-          <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: 'var(--editor-border)', flexShrink: 0 }} />
-          <div className="flex items-center gap-1">
-            <span style={{ opacity: 0.5, fontSize: '11px' }}>字符:</span>
-            <span style={{ fontWeight: 600, fontSize: '11px' }}>{stats.charCount}</span>
-          </div>
-          <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: 'var(--editor-border)', flexShrink: 0 }} />
-          <div className="flex items-center gap-1">
-            <span style={{ opacity: 0.5, fontSize: '11px' }}>行数:</span>
-            <span style={{ fontWeight: 600, fontSize: '11px' }}>{stats.lineCount}</span>
-          </div>
-          {lintIssues.length > 0 && (
+          {features.stats && (
+            <>
+              <div
+                style={{
+                  width: '4px',
+                  height: '4px',
+                  transform: 'rotate(45deg)',
+                  backgroundColor: 'var(--button-primary)',
+                  marginRight: '8px',
+                  flexShrink: 0
+                }}
+              />
+              <div className="flex items-center gap-1">
+                <span style={{ opacity: 0.5, fontSize: '11px' }}>字数:</span>
+                <span style={{ fontWeight: 600, fontSize: '11px' }}>{currentWordCount}</span>
+                <button
+                  onClick={toggleWordCountMode}
+                  className="transition-colors"
+                  style={{
+                    borderRadius: '4px',
+                    padding: '2px 8px',
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    border: '1px solid rgba(59, 130, 246, 0.15)',
+                    fontSize: '10px',
+                    fontWeight: 500,
+                    color: 'var(--editor-text)',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(59, 130, 246, 0.08)' }}
+                  title={wordCountMode === 'text' ? '切换到标准模式（包含空格）' : '切换到纯文本模式（不含空格）'}
+                >
+                  {wordCountMode === 'text' ? '纯文本' : '标准'}
+                </button>
+              </div>
+              <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: 'var(--editor-border)', flexShrink: 0 }} />
+              <div className="flex items-center gap-1">
+                <span style={{ opacity: 0.5, fontSize: '11px' }}>字符:</span>
+                <span style={{ fontWeight: 600, fontSize: '11px' }}>{stats.charCount}</span>
+              </div>
+              <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: 'var(--editor-border)', flexShrink: 0 }} />
+              <div className="flex items-center gap-1">
+                <span style={{ opacity: 0.5, fontSize: '11px' }}>行数:</span>
+                <span style={{ fontWeight: 600, fontSize: '11px' }}>{stats.lineCount}</span>
+              </div>
+            </>
+          )}
+          {features.lint && lintIssues.length > 0 && (
             <>
               <div style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: 'var(--editor-border)', flexShrink: 0 }} />
               <div
@@ -1244,35 +1255,39 @@ const Editor = forwardRef(function Editor(
         </div>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".md,.markdown"
-        multiple={false}
-        onChange={handleFileChange}
-        className="hidden"
-        aria-hidden="true"
-      />
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp,image/bmp,image/svg+xml"
-        multiple={false}
-        onChange={handleImageFileChange}
-        className="hidden"
-        aria-hidden="true"
-      />
+      {features.fileImport && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".md,.markdown"
+          multiple={false}
+          onChange={handleFileChange}
+          className="hidden"
+          aria-hidden="true"
+        />
+      )}
+      {features.imageUpload && (
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp,image/bmp,image/svg+xml"
+          multiple={false}
+          onChange={handleImageFileChange}
+          className="hidden"
+          aria-hidden="true"
+        />
+      )}
 
-      <SaveAsModal
+      {features.exportFile && <SaveAsModal
         isOpen={showSaveAsModal}
         onClose={() => setShowSaveAsModal(false)}
         content={value}
         defaultFileName={sanitizeFileName(extractTitle(value)) || 'Untitled'}
         onSuccess={(msg) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3000) }}
         onError={(msg) => { setError(msg); setTimeout(() => setError(null), 5000) }}
-      />
+      />}
 
-      <OptimizeImagesModal
+      {features.imageOptimize && <OptimizeImagesModal
         isOpen={showOptimizeModal}
         onClose={() => setShowOptimizeModal(false)}
         content={value}
@@ -1282,9 +1297,9 @@ const Editor = forwardRef(function Editor(
         }}
         onSuccess={(msg) => { setSuccess(msg); setTimeout(() => setSuccess(null), 3000) }}
         onError={(msg) => { setError(msg); setTimeout(() => setError(null), 5000) }}
-      />
+      />}
 
-      <FrontMatterPanel
+      {features.frontMatter && <FrontMatterPanel
         isOpen={showFrontMatter}
         onClose={() => setShowFrontMatter(false)}
         content={value}
@@ -1292,9 +1307,9 @@ const Editor = forwardRef(function Editor(
           pushUndo(newContent, 'front-matter')
           onChange(newContent)
         }}
-      />
+      />}
 
-      {largeImageConfirm && (
+      {features.imageUpload && largeImageConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
           style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
@@ -1362,7 +1377,7 @@ const Editor = forwardRef(function Editor(
         </div>
       )}
 
-      <LintPopover
+      {features.lint && <LintPopover
         issues={lintIssues}
         content={value}
         onJumpToIssue={handleJumpToIssue}
@@ -1372,7 +1387,7 @@ const Editor = forwardRef(function Editor(
         onClose={closeLintPopover}
         onMouseEnter={cancelCloseLintPopover}
         onMouseLeave={scheduleCloseLintPopover}
-      />
+      />}
     </div>
   )
 })
