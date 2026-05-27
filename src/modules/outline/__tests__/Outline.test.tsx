@@ -66,6 +66,30 @@ const simpleHeadings: OutlineItem[] = [
   }
 ]
 
+const getFirstItemCollapseButton = () => {
+  const button = screen
+    .getAllByRole('button', { name: '折叠' })
+    .find((element) => element.getAttribute('aria-label') === '折叠')
+
+  if (!button) {
+    throw new Error('未找到单项折叠按钮')
+  }
+
+  return button
+}
+
+const getFirstItemExpandButton = () => {
+  const button = screen
+    .getAllByRole('button', { name: '展开' })
+    .find((element) => element.getAttribute('aria-label') === '展开')
+
+  if (!button) {
+    throw new Error('未找到单项展开按钮')
+  }
+
+  return button
+}
+
 describe('Outline 组件', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -100,14 +124,14 @@ describe('Outline 组件', () => {
       (parseMarkdownHeadings as any).mockReturnValue(mockHeadings)
       render(<Outline content="" />)
       
-      const collapseButton = screen.getByRole('button', { name: '折叠' })
+      const collapseButton = getFirstItemCollapseButton()
       const subHeading = screen.getByText('1.1 小节')
       
       expect(subHeading).toBeVisible()
       
       fireEvent.click(collapseButton)
       
-      expect(screen.getByRole('button', { name: '展开' })).toBeInTheDocument()
+      expect(getFirstItemExpandButton()).toBeInTheDocument()
     })
 
     it('没有子节点的标题不应该显示折叠图标', () => {
@@ -124,8 +148,11 @@ describe('Outline 组件', () => {
       (parseMarkdownHeadings as any).mockReturnValue(mockHeadings)
       render(<Outline content="" />)
       
-      expect(screen.getByTitle('全部展开')).toBeInTheDocument()
       expect(screen.getByTitle('全部折叠')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByTitle('全部折叠'))
+
+      expect(screen.getByTitle('全部展开')).toBeInTheDocument()
     })
 
     it('点击全部折叠应该折叠所有标题', () => {
@@ -140,8 +167,11 @@ describe('Outline 组件', () => {
       (parseMarkdownHeadings as any).mockReturnValue(mockHeadings)
       render(<Outline content="" />)
       
+      fireEvent.click(screen.getByTitle('全部折叠'))
       const expandAllButton = screen.getByTitle('全部展开')
       fireEvent.click(expandAllButton)
+
+      expect(screen.getByTitle('全部折叠')).toBeInTheDocument()
     })
 
     it('没有可折叠项时不应该显示全部展开/折叠按钮', () => {
@@ -159,7 +189,7 @@ describe('Outline 组件', () => {
       render(<Outline content="" />)
       
       const headingButton = screen.getByText('第一章').closest('button')
-      const collapseButton = screen.getByRole('button', { name: '折叠' })
+      const collapseButton = getFirstItemCollapseButton()
       
       expect(collapseButton).toBeInTheDocument()
       
@@ -175,7 +205,7 @@ describe('Outline 组件', () => {
       (parseMarkdownHeadings as any).mockReturnValue(mockHeadings)
       render(<Outline content="" />)
       
-      const collapseButton = screen.getByRole('button', { name: '折叠' })
+      const collapseButton = getFirstItemCollapseButton()
       const svg = collapseButton.querySelector('svg')
       
       expect(svg).toBeInTheDocument()
@@ -185,10 +215,10 @@ describe('Outline 组件', () => {
       (parseMarkdownHeadings as any).mockReturnValue(mockHeadings)
       render(<Outline content="" />)
       
-      const collapseButton = screen.getByRole('button', { name: '折叠' })
+      const collapseButton = getFirstItemCollapseButton()
       fireEvent.click(collapseButton)
       
-      expect(screen.getByRole('button', { name: '展开' })).toBeInTheDocument()
+      expect(getFirstItemExpandButton()).toBeInTheDocument()
     })
   })
 

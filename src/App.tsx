@@ -1,14 +1,12 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
-import { marked } from 'marked';
-import { markedHighlight } from 'marked-highlight';
-import markedFootnote from 'marked-footnote';
-import hljs from 'highlight.js';
-import mermaid from 'mermaid';
-import { renderMathInHtml, renderMathInHtmlAsync } from './modules/preview/mathRenderer';
 import 'katex/dist/katex.min.css';
 import Editor from './modules/editor/Editor';
 import Preview from './modules/preview/Preview';
 import Outline from './modules/outline/Outline';
+import { useScrollSync } from './modules/editor/useScrollSync';
+import { useKaTeX } from './modules/preview/useKaTeX';
+import { useMarkdownRender } from './modules/preview/useMarkdownRender';
+import { useMermaid } from './modules/preview/useMermaid';
 import FootnoteSidebar from './components/FootnoteSidebar';
 import Sidebar from './modules/fileManager/Sidebar';
 import TabBar from './components/TabBar';
@@ -25,23 +23,7 @@ import { UndoRedoProvider, useUndoRedo } from './modules/editor/UndoRedoContext'
 import { textFromStorage, textToStorage } from './modules/shared/imageStore';
 import { findNode } from './modules/fileManager/fileManagerUtils';
 import { FileNode } from './types/fileManager';
-import { getRelativeScrollPosition, setRelativeScrollPosition, throttle, recordSyncStart, recordSyncComplete } from './modules/editor/scrollSync';
-import { getFlatHeadingList } from './modules/outline/outlineUtils';
 import 'highlight.js/styles/github-dark.css';
-
-marked.use({ gfm: true, breaks: true });
-
-marked.use(markedFootnote());
-
-marked.use(
-  markedHighlight({
-    langPrefix: 'hljs language-',
-    highlight(code, lang) {
-      const language = hljs.getLanguage(lang) ? lang : 'plaintext';
-      return hljs.highlight(code, { language }).value;
-    }
-  })
-);
 
 const AppContent: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
@@ -68,36 +50,12 @@ const AppContent: React.FC = () => {
   const activeFileId = getActiveFileId();
   const [localContent, setLocalContent] = useState<string>(() => textFromStorage(activeContent ?? ''));
   
-  const debouncedUpdateRef = useRef<NodeJS.Timeout | null>(null);
+  const debouncedUpdateRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   useEffect(() => {
     setLocalContent(textFromStorage(activeContent ?? ''));
   }, [activeFileId, activeContent]);
 
-  useEffect(() => {
-    try {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: theme === 'dark' ? 'dark' : 'default',
-        securityLevel: 'loose',
-        mindmap: {
-          padding: 16,
-          useMaxWidth: true,
-        },
-        flowchart: {
-          useMaxWidth: true,
-          htmlLabels: true,
-          curve: 'basis',
-        },
-        sequence: {
-          useMaxWidth: true,
-        },
-      });
-    } catch (e) {
-      console.warn('Mermaid init skipped:', e);
-    }
-  }, [theme]);
-  
   const [showOutline, setShowOutline] = useState<boolean>(() => {
     const saved = localStorage.getItem('outline-visibility');
     return saved !== null ? JSON.parse(saved) : true;
@@ -148,10 +106,8 @@ const AppContent: React.FC = () => {
 
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
-  const isSyncingRef = useRef(false);
-  const lastSyncSourceRef = useRef<'editor' | 'preview' | null>(null);
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPreviewEditingRef = useRef(false);
+  const { handleEditorScroll, handlePreviewScroll } = useScrollSync(editorRef, previewRef);
 
   const toggleOutline = useCallback(() => {
     setShowOutline(prev => {
@@ -252,65 +208,8 @@ const AppContent: React.FC = () => {
     }
   }, [localContent, handleChange, activeFileId, undoRedo]);
 
-  const throttledEditorScroll = useMemo(() => {
-    return throttle((_: number, editorElement: HTMLElement) => {
-      if (isSyncingRef.current) return;
-      if (lastSyncSourceRef.current === 'preview') return;
-      
-      recordSyncStart();
-      lastSyncSourceRef.current = 'editor';
-      isSyncingRef.current = true;
-      
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      
-      const relativePosition = getRelativeScrollPosition(editorElement);
-      
-      if (previewRef.current) {
-        setRelativeScrollPosition(previewRef.current, relativePosition, false);
-      }
-      
-      syncTimeoutRef.current = setTimeout(() => {
-        isSyncingRef.current = false;
-        recordSyncComplete();
-      }, 50);
-    }, 8);
-  }, []);
-
-  const handleEditorScroll = useCallback((scrollTop: number, editorElement: HTMLElement) => {
-    throttledEditorScroll(scrollTop, editorElement);
-  }, [throttledEditorScroll]);
-
-  const throttledPreviewScroll = useMemo(() => {
-    return throttle((_: number, previewElement: HTMLElement) => {
-      if (isSyncingRef.current) return;
-      if (lastSyncSourceRef.current === 'editor') return;
-      
-      recordSyncStart();
-      lastSyncSourceRef.current = 'preview';
-      isSyncingRef.current = true;
-      
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-      
-      const relativePosition = getRelativeScrollPosition(previewElement);
-      
-      if (editorRef.current) {
-        setRelativeScrollPosition(editorRef.current, relativePosition, false);
-      }
-      
-      syncTimeoutRef.current = setTimeout(() => {
-        isSyncingRef.current = false;
-        recordSyncComplete();
-      }, 50);
-    }, 8);
-  }, []);
-
-  const handlePreviewScroll = useCallback((scrollTop: number, previewElement: HTMLElement) => {
-    throttledPreviewScroll(scrollTop, previewElement);
-  }, [throttledPreviewScroll]);
-
   useEffect(() => {
     return () => {
-      if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
       if (debouncedUpdateRef.current) clearTimeout(debouncedUpdateRef.current);
     };
   }, []);
@@ -334,150 +233,9 @@ const AppContent: React.FC = () => {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [toggleTypewriterMode]);
 
-  const baseHtml = useMemo(() => {
-    try {
-      const contentForPreview = textToStorage(localContent);
-      const headings = getFlatHeadingList(contentForPreview);
-      let headingIndex = 0;
-      
-      const renderer = new marked.Renderer();
-      
-      renderer.heading = function({ text, depth, tokens }: { text: string; depth: number; tokens?: any[] }) {
-        headingIndex++;
-        const id = headingIndex <= headings.length ? headings[headingIndex - 1].id : `heading-${headingIndex}`;
-        const content = tokens ? this.parser.parseInline(tokens) : text;
-        return `<h${depth} id="${id}" class="heading-link">${content}</h${depth}>\n`;
-      };
-      
-      let html = marked.parse(contentForPreview, { renderer }) as string;
-      
-      html = html.replace(
-        /<pre><code class="language-(mermaid|mindmap)">([\s\S]*?)<\/code><\/pre>/g,
-        (_match, _lang, code) => {
-          const diagramId = `mermaid-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          const decodedCode = code
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&amp;/g, '&')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'");
-          return `<div class="mermaid-diagram" id="${diagramId}">${decodedCode}</div>`;
-        }
-      );
-
-      html = html.replace(
-        /<pre><code(?:\s+class="([^"]*)")?>([\s\S]*?)<\/code><\/pre>/g,
-        (_match, classes, code) => {
-          const langMatch = classes?.match(/language-(\w+)/);
-          const lang = langMatch ? langMatch[1] : '';
-          const lineCount = (code.match(/\n/g) || []).length + 1;
-          const isLong = lineCount > 10;
-          const collapsedStyle = isLong ? ' style="max-height:150px"' : '';
-          
-          return `<div class="code-block-wrapper${isLong ? ' code-block-collapsed' : ''}">
-  <div class="code-block-header" contenteditable="false">
-    <span class="code-block-lang">${lang || 'CODE'}</span>
-    <div class="code-block-actions">
-      <button class="code-copy-btn" title="复制代码">复制</button>
-      ${isLong ? '<button class="code-fold-btn" title="展开代码">展开</button>' : ''}
-    </div>
-  </div>
-  <div class="code-block-body"${collapsedStyle}>
-    <pre><code${classes ? ` class="${classes}"` : ''}>${code}</code></pre>
-  </div>
-  ${isLong ? `<div class="code-block-footer" contenteditable="false"><span>展开全部 (${lineCount} 行)</span></div>` : ''}
-</div>`;
-        }
-      );
-      
-      return html;
-    } catch (error) {
-      console.error('Markdown render error:', error);
-      return '<p>Render error</p>';
-    }
-  }, [localContent]);
-
-  const [renderedHtml, setRenderedHtml] = useState(baseHtml);
-  const mathDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mathAbortRef = useRef<boolean>(false);
-
-  useEffect(() => {
-    if (!baseHtml.includes('$')) {
-      setRenderedHtml(baseHtml);
-      return;
-    }
-
-    if (mathDebounceRef.current) {
-      clearTimeout(mathDebounceRef.current);
-    }
-    mathAbortRef.current = false;
-
-    const isLargeDoc = baseHtml.length > 50000;
-
-    mathDebounceRef.current = setTimeout(async () => {
-      if (mathAbortRef.current) return;
-
-      try {
-        if (isLargeDoc) {
-          const result = await renderMathInHtmlAsync(baseHtml);
-          if (!mathAbortRef.current) {
-            setRenderedHtml(result);
-          }
-        } else {
-          const result = renderMathInHtml(baseHtml);
-          if (!mathAbortRef.current) {
-            setRenderedHtml(result);
-          }
-        }
-      } catch (error) {
-        console.error('[KaTeX] Render failed:', error);
-        if (!mathAbortRef.current) {
-          setRenderedHtml(baseHtml);
-        }
-      }
-    }, 300);
-
-    return () => {
-      if (mathDebounceRef.current) {
-        clearTimeout(mathDebounceRef.current);
-      }
-      mathAbortRef.current = true;
-    };
-  }, [baseHtml]);
-
-  useEffect(() => {
-    const renderMermaid = async () => {
-      try {
-        const diagrams = document.querySelectorAll('.mermaid-diagram');
-        for (let i = 0; i < diagrams.length; i++) {
-          const diagram = diagrams[i] as HTMLElement;
-          if (diagram.dataset.rendered === 'true') continue;
-          
-          const id = `mermaid-svg-${i}-${Date.now()}`;
-          let code = diagram.textContent || '';
-          
-          code = code.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-          
-          if (!code.trim()) continue;
-          
-          try {
-            const { svg } = await mermaid.render(id, code);
-            diagram.innerHTML = svg;
-            diagram.dataset.rendered = 'true';
-          } catch (mErr) {
-            diagram.innerHTML = `<div style="padding:1rem;color:#e74c3c;background:rgba(231,76,60,0.1);border-radius:0.5rem;font-size:0.875rem;"><strong>图表渲染失败</strong><pre style="margin-top:0.5rem;white-space:pre-wrap;font-size:0.75rem;opacity:0.8;">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre></div>`;
-            diagram.dataset.rendered = 'true';
-          }
-        }
-      } catch (error) {
-        console.error('Mermaid init failure:', error);
-      }
-    };
-    
-    if (localContent.includes('mermaid') || localContent.includes('mindmap')) {
-      setTimeout(renderMermaid, 200);
-    }
-  }, [renderedHtml, localContent]);
+  const { html: baseHtml } = useMarkdownRender(localContent);
+  const { renderedHtml } = useKaTeX(baseHtml);
+  useMermaid(renderedHtml, localContent, theme);
 
   const [highlightedHeading, setHighlightedHeading] = useState<string | null>(null);
   const [scrollActiveHeading, setScrollActiveHeading] = useState<string | null>(null);
